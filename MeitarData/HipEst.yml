@@ -1,0 +1,24 @@
+Offsets: 
+  Age: 47.5
+  eTIV: 1500
+Columns:
+  eTIV: global_eTIV
+  lHip: "Left-Hippocampus"
+  rHip: "Right-Hippocampus"
+  subject: subject_id
+L:
+  Intercept: 4318.15
+  Age: -5.08
+  Age2: -0.33
+  Age3: -0.0035
+  eTIV: 1.2
+  eTIV2: 0.0003
+R:
+  Intercept: 4175.15
+  Age: -3.29
+  Age2: -0.33
+  Age3: -0.0043
+  eTIV: 1.3
+Files: 
+  FS_Stats: "aseg_volumes.csv"
+  Subjects_Meta: "cfg_diagnosis.yml"

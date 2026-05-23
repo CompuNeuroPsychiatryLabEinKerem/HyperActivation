@@ -1,0 +1,66 @@
+Dataset:
+  file: aabc_normative_dataset.csv
+Filter:
+  age_min: 50
+  age_max: 88
+  diagnosis: 1
+Preprocessing:
+  volume_scale: 1000
+  Offsets:
+    age_open: 69.8815
+    eTIV: 1519.6554
+    BrainSegVolNotVent: 1016.0915
+    dm15: 15.4704
+    FS_L_Hippocampus: 3.63
+    FS_R_Hippocampus: 3.7301
+Sex:
+  encoding:
+    M: 1
+    F: -1
+ModelSelection:
+  criterion: BIC
+  BaseModels:
+  - name: age_sex_eTIV
+    predictors:
+    - age_open
+    - sex
+    - eTIV
+  - name: age_sex_Brain
+    predictors:
+    - age_open
+    - sex
+    - BrainSegVolNotVent
+Models:
+  eTIV:
+    ModelTerms:
+    - - age_open
+    - - eTIV
+    - - sex_enc
+    - - dm15
+    L:
+      Intercept: 0.008087
+      age: -0.022577
+      eTIV: 0.000703
+      sex: 0.056705
+      edu: 0.027369
+    R:
+      Intercept: 0.010453
+      age: -0.025742
+      eTIV: 0.000645
+      sex: 0.072921
+      edu: 0.033224
+  Brain:
+    ModelTerms:
+    - - age_open
+    - - BrainSegVolNotVent
+    - - dm15
+    L:
+      Intercept: -1.4e-05
+      age: -0.008502
+      brain: 0.002437
+      edu: 0.018248
+    R:
+      Intercept: 3.5e-05
+      age: -0.01149
+      brain: 0.002531
+      edu: 0.02333

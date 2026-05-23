@@ -1,0 +1,117 @@
+
+DATA_CONTENT:
+  BOLD_And_Behavioral:
+    Diagnoses: 
+      Diags: CTRL, MCI
+      Dg1: CN, MCI, AD
+      Dg2: RM
+    Demography:
+      DMG_Age:
+      DMG_Sex: F, M
+      DMG_EduYears:
+    Activation:
+      Domain: Space, Time, SpaceTime
+      SignalType: Default, Beta, PSC, Z
+      Region: Rsp, Hpc, pCunPCC
+      Size: Sum, Max_25, Max_50, Max_100, Max_200
+      Format: "{Domain}_{SignalType}_{Region}_{Size}"
+    OrientationPerformance:
+      Domain: Lex, Space, Time, Person
+      Subtype: D1, D2
+      Format: "EC_{Domain}[_{Subtype}]"
+    Connectivity:
+      ParcelType: Singles, Bilaterals, Networks
+      Format: "RSP_TO_{ParcelType}[_{Hemi}]_{Network}[_{Region}]"
+      Example: RSP_TO_Singles_LH_ContA_IPS
+    NeuroPsy:
+      Tests: Bonson, Flow, Frontal, Keshev, Lang, Memory
+    HippocampusVol:
+      Measures: CFT, CFT2, CFT2_MNI, CFT_MNI, FS
+      Hemis: L, R
+      Format: "HPVOL_{Measures}_{Hemi}"
+      
+DATA_SOURCES:
+  BOLD_And_Behavioral: dfSbjData.pkl
+  Null_Models_OrientationPerformance: 
+    All: "NullModel.pkl"
+    CN_Only: "NullModelCN.pkl"
+
+NULL_MODELS:
+  OrientationPerformance:
+    Space:
+      Items: 
+        Description: String
+        Model: OlsObject
+      Features:
+        Age: Years_Float
+        isMale: Boolean
+  HippoVol_Null_Model:
+    Offsets: 
+      Age: 47.5
+      eTIV: 1500
+    Columns:
+      eTIV: MISC_ETIV
+    L:
+      Intercept: 4318.15
+      Age: -5.08
+      Age2: -0.33
+      Age3: -0.0035
+      eTIV: 1.2
+      eTIV2: 0.0003
+    R:
+      Intercept: 4175.15
+      Age: -3.29
+      Age2: -0.33
+      Age3: -0.0043
+      eTIV: 1.3
+MISC:
+  Rsp_Size: 497
+  Colormap: Red_To_Blue
+  ColorNormlization: 1
+  Reference_Age_For_Correction: 70
+  Reference_Sex_For_Correction: F
+  ConnectivityMaxVal: 5
+  MarkerScale: 2
+
+
+DEFAULT_CFG:
+  Activation: 
+    Domains: Mental_VS_Lex
+    SignalType: Default
+    Region: Hpc
+    Size: Max_200
+  OrientationPerformance:
+    Domain: Lex
+    Subtype: 
+    Null_Model: All
+  Connectivity:
+    ParcelType: Singles
+  HippocampusVol:
+    Measure: FS
+    Hemi: Sum
+    CorrectionType: Rel
+  UseDiagnoses:
+    Bool: True
+    Columns: Diags
+    Key: 
+      CTRL: small
+      MCI: large
+  CorrelationMatrix:
+    Do: True
+    Attrs: OrientationPerformance, Connectivity, HippocampusVol
+    Colormap: RdPu
+  AUC_BarPlot:
+    - Connectivity
+    - HippocampusVol
+    - OrientationPerformance
+    - Connectivity, HippocampusVol
+    - OrientationPerformance, HippocampusVol
+    - OrientationPerformance, Connectivity
+    - OrientationPerformance, HippocampusVol, Connectivity
+  Aliases:
+    OrientationPerformance: ES
+    Connectivity: Conn
+    HippocampusVol: Vol
+    
+      
+      

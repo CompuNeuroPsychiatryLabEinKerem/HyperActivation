@@ -1,0 +1,13 @@
+# Data files
+*.pkl
+*.xlsx
+*.csv
+*.nii
+*.nii.gz
+
+# Large data directories
+AABC_Data/
+FS_Files/
+
+# Claude Code
+.claude/

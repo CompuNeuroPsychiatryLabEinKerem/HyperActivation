@@ -1,0 +1,27 @@
+
+AXES:
+  Orientation_Score:
+  Activation_RSP:
+    Vertices: Full, 100, 50, 20
+    Source: Default, Beta, Z, PSC
+    Stat: Mean, RMS
+  Activation_Hippocampus:
+  Connectivity:
+    Stat: Mean, RMS
+    Units: Singles, Bilaterals, Networks
+    Terms: 
+  Volume_Hippocampus:
+    Source: FS, CFT, CFT_MNI
+    Stat: Mean, Left, Right, Max, Min
+  Age:
+CLASSIFICATION:
+  Enable: False
+  Use_LOO_For_PValue: False
+  Middle_Value: Mean, Median
+  Permutations: 1000
+MISC:
+  Color_Margin: 
+  Remove_RM:
+  
+
+
