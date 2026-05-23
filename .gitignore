@@ -9,5 +9,9 @@
 AABC_Data/
 FS_Files/
 
+# Python cache
+__pycache__/
+*.pyc
+
 # Claude Code
 .claude/
