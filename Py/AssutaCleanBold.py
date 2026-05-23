@@ -85,11 +85,9 @@ def cleanAllSubjects(cfgFile):
     boldfiles     = glob(opj(bolddir, f'sub-*_ses-*_task-{keyword}_run-*_Atlas_s0{fsuff}.dtseries.nii'))
     confoundFiles = glob(opj(regdir,  f'*_task-{keyword}_*_desc-confounds_*.tsv'))
 
-    # Key: (subject, session, run) — run is int-normalised so run-001 == run-1
-    regBold = re.compile(r'sub-(\w+)_ses-(\d+)_task-[^_]+_run-0*(\d+)_')
-    regCnfd = re.compile(r'sub-(\w+)_ses-(\d+)_task-[^_]+_run-0*(\d+)_')
-    boldfilesDict = {m.groups(): f for f in boldfiles     if (m := regBold.match(op.basename(f)))}
-    cnfdfilesDict = {m.groups(): f for f in confoundFiles if (m := regCnfd.match(op.basename(f)))}
+    # Key: everything up to the modality suffix — e.g. 'sub-HaHaA_ses-001_task-mental_run-001'
+    boldfilesDict = {op.basename(f).split('_Atlas')[0]: f for f in boldfiles}
+    cnfdfilesDict = {op.basename(f).split('_desc')[0]:  f for f in confoundFiles}
 
     boldSet    = set(boldfilesDict)
     cnfdSet    = set(cnfdfilesDict)
@@ -141,7 +139,7 @@ def cleanAllSubjects(cfgFile):
                 if status == 'ok':
                     nDone += 1
                 else:
-                    nFailed += 1
+                    nFailed += 1   # covers REJECTED and SKIPPED — both need attention
                 print(f'  [{n}/{nTotal}] {status}: {name}', flush=True)
             except Exception as e:
                 nFailed += 1
@@ -228,6 +226,9 @@ def cleanBoldFile(boldFile, confoundsFile, outFile, opts={}):
     numTrs, numVertices = boldData.shape
 
     confoundsDf = pd.read_csv(confoundsFile, sep='\t')
+
+    if len(confoundsDf) != numTrs:
+        return f'SKIPPED — TR mismatch: BOLD={numTrs}, confounds={len(confoundsDf)}'
 
     doScrub = SCRUB['Do']
     if doScrub:
