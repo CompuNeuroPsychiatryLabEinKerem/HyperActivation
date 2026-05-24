@@ -19,7 +19,7 @@ def loadParcelIdxs(dlabelFile=YEO_DLABEL):
 
 
 def parcellateFile(boldFile, parcelIdxs):
-    boldData = nb.load(boldFile).get_fdata()    # (nTP, 91282)
+    boldData = nb.load(boldFile, mmap=False).get_fdata()    # (nTP, 91282)
 
     boldData -= boldData.mean(axis=0)           # remove per-vertex temporal mean
     boldData /= np.sqrt((boldData**2).mean())   # normalize by global RMS
@@ -77,11 +77,15 @@ def parcellateDir(dtseriesDir, runs2tasksFile, outputFile, dlabelFile=YEO_DLABEL
         if 'task-rest' not in sig or sig in r2tSigSet:
             continue
         sbjSess  = sig.split('_')[0].replace('sub-', '')   # e.g. 'AvShA'
-        if sbjSess[-1] not in 'AB':
+        if len(sbjSess) == 4:
+            print(f'  INFO: single-session subject {sbjSess}, assigning Run=1')
+            trueSbj, runIdx = sbjSess, 1
+        elif sbjSess[-1] not in 'AB':
             print(f'  WARNING: unexpected session suffix in {sig} — skipping')
             continue
-        trueSbj  = sbjSess[:-1]                             # e.g. 'AvSh'
-        runIdx   = 1 if sbjSess.endswith('A') else 2
+        else:
+            trueSbj  = sbjSess[:-1]                         # e.g. 'AvSh'
+            runIdx   = 1 if sbjSess.endswith('A') else 2
         restRuns.append((f, trueSbj, runIdx, 'rest', sig))
 
     # --- Process all ---
