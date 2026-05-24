@@ -9,13 +9,38 @@ import nibabel as nb
 from glob import glob
 
 YEO_DLABEL = r'C:\Projects\Parcellations\Yeo\Yeo2011_17Networks_91K.split_components.dlabel.nii'
-N_PARCELS  = 114     # labels 1-114; label 0 is background
 
 
-def loadParcelIdxs(dlabelFile=YEO_DLABEL):
-    labelmap   = nb.load(dlabelFile).get_fdata().flatten().astype(int)
-    parcelIdxs = [np.argwhere(labelmap == lbl).flatten() for lbl in np.arange(1, N_PARCELS+1)]
-    return parcelIdxs
+def _parseDesc(desc):
+    # '17Networks_LH_SomMotA'       -> Hemi='L', Network='SomMotA', SubParcel=''
+    # '17Networks_LH_SomMotB_Cent'  -> Hemi='L', Network='SomMotB', SubParcel='Cent'
+    parts    = desc.replace('17Networks_', '').split('_')
+    hemi     = parts[0][0]                          # 'L' or 'R'
+    network  = parts[1]
+    subParcel = parts[2] if len(parts) > 2 else ''
+    return hemi, network, subParcel
+
+
+def loadParcelIdxs(dlabelFile, labelFile):
+    X            = nb.load(dlabelFile, mmap=False).get_fdata().flatten().astype(int)
+    parcelLabels = np.unique(X)[1:]                 # drop background (0)
+    parcelIdxs   = [np.argwhere(X == lbl).flatten() for lbl in parcelLabels]
+
+    label2Desc = {}
+    for line in open(labelFile):
+        parts = line.split()
+        if len(parts) >= 2 and parts[1] != 'NONE':
+            label2Desc[int(parts[0])] = parts[1]
+
+    rows = []
+    for lbl in parcelLabels:
+        desc                   = label2Desc.get(int(lbl), 'Unknown')
+        hemi, network, subParcel = _parseDesc(desc)
+        rows.append(dict(Label=int(lbl), Hemi=hemi, Network=network,
+                         SubParcel=subParcel, Desc=desc))
+
+    labelsDF = pd.DataFrame(rows)
+    return parcelIdxs, labelsDF
 
 
 def parcellateFile(boldFile, parcelIdxs):
@@ -29,12 +54,13 @@ def parcellateFile(boldFile, parcelIdxs):
     boldData /= np.sqrt((boldData**2).mean())   # normalize by global RMS
 
     nTP      = boldData.shape[0]
-    parcelTS = np.zeros((N_PARCELS, nTP))
+    nParcels = len(parcelIdxs)
+    parcelTS = np.zeros((nParcels, nTP))
     for i, idxs in enumerate(parcelIdxs):
         if idxs.size:
             parcelTS[i] = boldData[:, idxs].sum(axis=1)
 
-    return parcelTS                             # (N_PARCELS, nTP)
+    return parcelTS                             # (nParcels, nTP)
 
 
 def _parseRuns2Tasks(runs2tasksFile):
@@ -56,9 +82,9 @@ def _parseRuns2Tasks(runs2tasksFile):
     return entries
 
 
-def parcellateDir(dtseriesDir, runs2tasksFile, outputFile, dlabelFile=YEO_DLABEL):
-    parcelIdxs  = loadParcelIdxs(dlabelFile)
-    parcelsSize = np.array([idxs.size for idxs in parcelIdxs])
+def parcellateDir(dtseriesDir, runs2tasksFile, labelFile, outputFile, dlabelFile=YEO_DLABEL):
+    parcelIdxs, labelsDF = loadParcelIdxs(dlabelFile, labelFile)
+    parcelsSize          = np.array([idxs.size for idxs in parcelIdxs])
 
     # All cleaned bold files keyed by signature (everything before _Atlas)
     allFiles    = glob(opj(dtseriesDir, '*_Atlas_s0_cleaned.dtseries.nii'))
@@ -80,7 +106,7 @@ def parcellateDir(dtseriesDir, runs2tasksFile, outputFile, dlabelFile=YEO_DLABEL
     for sig, f in boldSigDict.items():
         if 'task-rest' not in sig or sig in r2tSigSet:
             continue
-        sbjSess  = sig.split('_')[0].replace('sub-', '')   # e.g. 'AvShA'
+        sbjSess = sig.split('_')[0].replace('sub-', '')     # e.g. 'AvShA'
         if len(sbjSess) == 4:
             print(f'  INFO: single-session subject {sbjSess}, assigning Run=1')
             trueSbj, runIdx = sbjSess, 1
@@ -88,13 +114,14 @@ def parcellateDir(dtseriesDir, runs2tasksFile, outputFile, dlabelFile=YEO_DLABEL
             print(f'  WARNING: unexpected session suffix in {sig} — skipping')
             continue
         else:
-            trueSbj  = sbjSess[:-1]                         # e.g. 'AvSh'
-            runIdx   = 1 if sbjSess.endswith('A') else 2
+            trueSbj = sbjSess[:-1]                          # e.g. 'AvSh'
+            runIdx  = 1 if sbjSess.endswith('A') else 2
         restRuns.append((f, trueSbj, runIdx, 'rest', sig))
 
     # --- Process all ---
     allRuns = taskRuns + restRuns
-    print(f'Processing {len(taskRuns)} task runs + {len(restRuns)} rest runs...', flush=True)
+    print(f'Processing {len(taskRuns)} task runs + {len(restRuns)} rest runs '
+          f'({len(parcelIdxs)} parcels)...', flush=True)
 
     timecourses = []
     rows        = []
@@ -110,6 +137,7 @@ def parcellateDir(dtseriesDir, runs2tasksFile, outputFile, dlabelFile=YEO_DLABEL
         Timecourses = timecourses,
         parcelsSize = parcelsSize,
         Runs        = pd.DataFrame(rows),
+        Labels      = labelsDF,
     )
     pickle.dump(out, open(outputFile, 'wb'))
     print(f'Saved {len(timecourses)} runs → {outputFile}', flush=True)
@@ -120,8 +148,10 @@ if __name__ == '__main__':
     p = argparse.ArgumentParser(description='Parcellate cleaned dtseries files into Yeo parcel timeseries.')
     p.add_argument('dtseriesDir',    help='Folder containing *_Atlas_s0_cleaned.dtseries.nii files')
     p.add_argument('runs2tasksFile', help='Runs2Tasks.txt mapping file')
+    p.add_argument('labelFile',      help='Parcel label text file (parcelIdx, desc, r, g, b, a)')
     p.add_argument('outputFile',     help='Output pickle file path')
     p.add_argument('--dlabel',       default=YEO_DLABEL, dest='dlabelFile',
                                      help='dlabel parcellation file (default: Yeo 91K)')
     args = p.parse_args()
-    parcellateDir(args.dtseriesDir, args.runs2tasksFile, args.outputFile, args.dlabelFile)
+    parcellateDir(args.dtseriesDir, args.runs2tasksFile, args.labelFile,
+                  args.outputFile, args.dlabelFile)
