@@ -19,7 +19,11 @@ def loadParcelIdxs(dlabelFile=YEO_DLABEL):
 
 
 def parcellateFile(boldFile, parcelIdxs):
-    boldData = nb.load(boldFile, mmap=False).get_fdata()    # (nTP, 91282)
+    try:
+        boldData = nb.load(boldFile, mmap=False).get_fdata()    # (nTP, 91282)
+    except OSError as e:
+        print(f'  ERROR loading {op.basename(boldFile)}: {e}', flush=True)
+        return None
 
     boldData -= boldData.mean(axis=0)           # remove per-vertex temporal mean
     boldData /= np.sqrt((boldData**2).mean())   # normalize by global RMS
@@ -96,7 +100,10 @@ def parcellateDir(dtseriesDir, runs2tasksFile, outputFile, dlabelFile=YEO_DLABEL
     rows        = []
     for boldFile, trueSbj, fullRunIdx, taskName, origID in allRuns:
         print(f'  {op.basename(boldFile)}', flush=True)
-        timecourses.append(parcellateFile(boldFile, parcelIdxs))
+        ts = parcellateFile(boldFile, parcelIdxs)
+        if ts is None:
+            continue
+        timecourses.append(ts)
         rows.append(dict(Subject=trueSbj, Run=fullRunIdx, TaskName=taskName, OrigID=origID))
 
     out = dict(
