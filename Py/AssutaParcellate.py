@@ -82,7 +82,13 @@ def _parseRuns2Tasks(runs2tasksFile):
     return entries
 
 
-def parcellateDir(dtseriesDir, runs2tasksFile, labelFile, outputFile, dlabelFile=YEO_DLABEL):
+def _sigToMeta(sig):
+    # sig: 'sub-AvSh_ses-001_task-mental_run-001' → (subject, taskName, runIdx)
+    parts    = {k: v for k, v in (p.split('-', 1) for p in sig.split('_') if '-' in p)}
+    return parts.get('sub', sig), parts.get('task', ''), int(parts.get('run', 0))
+
+
+def parcellateDir(dtseriesDir, labelFile, outputFile, runs2tasksFile=None, dlabelFile=YEO_DLABEL):
     parcelIdxs, labelsDF = loadParcelIdxs(dlabelFile, labelFile)
     parcelsSize          = np.array([idxs.size for idxs in parcelIdxs])
 
@@ -90,38 +96,46 @@ def parcellateDir(dtseriesDir, runs2tasksFile, labelFile, outputFile, dlabelFile
     allFiles    = glob(opj(dtseriesDir, '*_Atlas_s0_cleaned.dtseries.nii'))
     boldSigDict = {op.basename(f).split('_Atlas')[0]: f for f in allFiles}
 
-    # --- Task runs from Runs2Tasks ---
-    r2tEntries = _parseRuns2Tasks(runs2tasksFile)
-    r2tSigSet  = {origID for origID, *_ in r2tEntries}
+    if runs2tasksFile is None:
+        # No mapping file: parse Subject/Task/Run directly from filename
+        allRuns = []
+        for sig, f in sorted(boldSigDict.items()):
+            trueSbj, taskName, runIdx = _sigToMeta(sig)
+            allRuns.append((f, trueSbj, runIdx, taskName, sig))
+        print(f'Processing {len(allRuns)} runs (no Runs2Tasks mapping) '
+              f'({len(parcelIdxs)} parcels)...', flush=True)
+    else:
+        # --- Task runs from Runs2Tasks ---
+        r2tEntries = _parseRuns2Tasks(runs2tasksFile)
+        r2tSigSet  = {origID for origID, *_ in r2tEntries}
 
-    taskRuns = []
-    for origID, trueSbj, fullRunIdx, taskName in r2tEntries:
-        if origID not in boldSigDict:
-            print(f'  WARNING: no cleaned file found for {origID}')
-            continue
-        taskRuns.append((boldSigDict[origID], trueSbj, fullRunIdx, taskName, origID))
+        taskRuns = []
+        for origID, trueSbj, fullRunIdx, taskName in r2tEntries:
+            if origID not in boldSigDict:
+                print(f'  WARNING: no cleaned file found for {origID}')
+                continue
+            taskRuns.append((boldSigDict[origID], trueSbj, fullRunIdx, taskName, origID))
 
-    # --- Rest runs (task-rest files not in Runs2Tasks) ---
-    restRuns = []
-    for sig, f in boldSigDict.items():
-        if 'task-rest' not in sig or sig in r2tSigSet:
-            continue
-        sbjSess = sig.split('_')[0].replace('sub-', '')     # e.g. 'AvShA'
-        if len(sbjSess) == 4:
-            print(f'  INFO: single-session subject {sbjSess}, assigning Run=1')
-            trueSbj, runIdx = sbjSess, 1
-        elif sbjSess[-1] not in 'AB':
-            print(f'  WARNING: unexpected session suffix in {sig} — skipping')
-            continue
-        else:
-            trueSbj = sbjSess[:-1]                          # e.g. 'AvSh'
-            runIdx  = 1 if sbjSess.endswith('A') else 2
-        restRuns.append((f, trueSbj, runIdx, 'rest', sig))
+        # --- Rest runs (task-rest files not in Runs2Tasks) ---
+        restRuns = []
+        for sig, f in boldSigDict.items():
+            if 'task-rest' not in sig or sig in r2tSigSet:
+                continue
+            sbjSess = sig.split('_')[0].replace('sub-', '')     # e.g. 'AvShA'
+            if len(sbjSess) == 4:
+                print(f'  INFO: single-session subject {sbjSess}, assigning Run=1')
+                trueSbj, runIdx = sbjSess, 1
+            elif sbjSess[-1] not in 'AB':
+                print(f'  WARNING: unexpected session suffix in {sig} — skipping')
+                continue
+            else:
+                trueSbj = sbjSess[:-1]                          # e.g. 'AvSh'
+                runIdx  = 1 if sbjSess.endswith('A') else 2
+            restRuns.append((f, trueSbj, runIdx, 'rest', sig))
 
-    # --- Process all ---
-    allRuns = taskRuns + restRuns
-    print(f'Processing {len(taskRuns)} task runs + {len(restRuns)} rest runs '
-          f'({len(parcelIdxs)} parcels)...', flush=True)
+        allRuns = taskRuns + restRuns
+        print(f'Processing {len(taskRuns)} task runs + {len(restRuns)} rest runs '
+              f'({len(parcelIdxs)} parcels)...', flush=True)
 
     timecourses = []
     rows        = []
@@ -146,12 +160,13 @@ def parcellateDir(dtseriesDir, runs2tasksFile, labelFile, outputFile, dlabelFile
 if __name__ == '__main__':
     import argparse
     p = argparse.ArgumentParser(description='Parcellate cleaned dtseries files into Yeo parcel timeseries.')
-    p.add_argument('dtseriesDir',    help='Folder containing *_Atlas_s0_cleaned.dtseries.nii files')
-    p.add_argument('runs2tasksFile', help='Runs2Tasks.txt mapping file')
-    p.add_argument('labelFile',      help='Parcel label text file (parcelIdx, desc, r, g, b, a)')
-    p.add_argument('outputFile',     help='Output pickle file path')
-    p.add_argument('--dlabel',       default=YEO_DLABEL, dest='dlabelFile',
-                                     help='dlabel parcellation file (default: Yeo 91K)')
+    p.add_argument('dtseriesDir',  help='Folder containing *_Atlas_s0_cleaned.dtseries.nii files')
+    p.add_argument('labelFile',    help='Parcel label text file (parcelIdx, desc, r, g, b, a)')
+    p.add_argument('outputFile',   help='Output pickle file path')
+    p.add_argument('--runs2tasks', default=None, dest='runs2tasksFile',
+                                   help='Runs2Tasks.txt mapping file (omit for single-session datasets)')
+    p.add_argument('--dlabel',     default=YEO_DLABEL, dest='dlabelFile',
+                                   help='dlabel parcellation file (default: Yeo 91K)')
     args = p.parse_args()
-    parcellateDir(args.dtseriesDir, args.runs2tasksFile, args.labelFile,
-                  args.outputFile, args.dlabelFile)
+    parcellateDir(args.dtseriesDir, args.labelFile, args.outputFile,
+                  args.runs2tasksFile, args.dlabelFile)
