@@ -139,11 +139,27 @@ class VizApp:
 
         self.netList.bind('<<ListboxSelect>>', lambda e: self._update())
 
+        # ── Diagnoses ─────────────────────────────────────────────────────
+        diagFrame = tk.LabelFrame(ctrl, text='Diagnoses', padx=4, pady=4)
+        diagFrame.pack(side=tk.LEFT, padx=6, anchor=tk.N, fill=tk.Y)
+
+        self.diagList = tk.Listbox(diagFrame, selectmode=tk.MULTIPLE,
+                                   height=len(DIAG_ORDER),
+                                   exportselection=False, width=12)
+        self.diagList.pack()
+        for i, d in enumerate(DIAG_ORDER):
+            self.diagList.insert(tk.END, d)
+            self.diagList.selection_set(i)              # all selected by default
+        self.diagList.bind('<<ListboxSelect>>', lambda e: self._update())
+
     def _selectedNetworks(self):
         return [self.networks[i] for i in self.netList.curselection()]
 
     def _selectedTasks(self):
         return [self.tasks[i] for i in self.taskList.curselection()]
+
+    def _selectedDiagnoses(self):
+        return [DIAG_ORDER[i] for i in self.diagList.curselection()]
 
     def _update(self):
         try:
@@ -151,10 +167,11 @@ class VizApp:
         except ValueError:
             return
 
-        seed     = self.seedVar.get()
-        yMode    = self.yVar.get()
-        networks = self._selectedNetworks()
-        tasks    = self._selectedTasks()
+        seed      = self.seedVar.get()
+        yMode     = self.yVar.get()
+        networks  = self._selectedNetworks()
+        tasks     = self._selectedTasks()
+        diagnoses = self._selectedDiagnoses()
 
         sbjX        = _computeX(self.runsDF, self.regionsDF, seed, networks, tasks, clipZ)
         sbjY, sbjDF = _computeY(self.runsDF, yMode)
@@ -162,6 +179,8 @@ class VizApp:
         self.ax.clear()
         allX, allY = [], []
         for diag in DIAG_ORDER:
+            if diag not in diagnoses:
+                continue
             sbjs  = sbjDF[sbjDF['Diagnosis'] == diag].index
             xVals = sbjX.reindex(sbjs).dropna()
             yVals = sbjY.reindex(xVals.index).dropna()
