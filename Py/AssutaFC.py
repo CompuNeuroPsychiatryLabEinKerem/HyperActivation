@@ -14,14 +14,14 @@ def _normTS(ts):
     return ts / nrms
 
 
-def computeFC(pklFile, outputFile=None):
-    data        = pickle.load(open(pklFile, 'rb'))
-    timecourses = data['Timecourses']   # list of (nParcels, nTP)
-    parcelsSize = data['parcelsSize']   # (nParcels,)
-    labelsDF    = data['Labels']
-    runsDF      = data['Runs']
+def computeFC(arraysPkl, metaXlsx, outputFile=None):
+    arrays      = pickle.load(open(arraysPkl, 'rb'))
+    timecourses = arrays['Timecourses']   # list of (nParcels, nTP)
+    parcelsSize = arrays['parcelsSize']   # (nParcels,)
+    labelsDF    = pd.read_excel(metaXlsx, sheet_name='Labels')
+    runsDF      = pd.read_excel(metaXlsx, sheet_name='Runs')
 
-    rspDF = labelsDF[labelsDF.Network == 'Rsp']
+    rspDF = labelsDF[labelsDF.SubParcel.str.startswith('Rsp', na=False)]
     assert len(rspDF) == 2, f'Expected 2 Rsp parcels (L+R), found {len(rspDF)}'
     lIdx  = rspDF[rspDF.Hemi == 'L'].index[0]
     rIdx  = rspDF[rspDF.Hemi == 'R'].index[0]
@@ -53,7 +53,8 @@ def computeFC(pklFile, outputFile=None):
 if __name__ == '__main__':
     import argparse
     p = argparse.ArgumentParser(description='Compute Rsp seed-based FC from parcel timecourses.')
-    p.add_argument('pklFile',    help='Input parcellation pickle (from AssutaParcellate.py)')
+    p.add_argument('arraysPkl', help='Numpy arrays pickle (Timecourses, parcelsSize)')
+    p.add_argument('metaXlsx',  help='Metadata xlsx (Runs + Labels sheets)')
     p.add_argument('outputFile', help='Output FC pickle file path')
     args = p.parse_args()
-    computeFC(args.pklFile, args.outputFile)
+    computeFC(args.arraysPkl, args.metaXlsx, args.outputFile)
