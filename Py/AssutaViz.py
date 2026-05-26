@@ -23,7 +23,16 @@ def _loadData(xlsxFile):
     return runsDF, regionsDF, networks, tasks
 
 
-def _computeX(runsDF, regionsDF, seed, networks, tasks, clipZ):
+def _agg(df, aggType, axis=0):
+    if aggType == 'RMS':
+        return np.sqrt((df**2).mean(axis=axis))
+    elif aggType == 'AverageAbs':
+        return df.abs().mean(axis=axis)
+    else:                           # Average
+        return df.mean(axis=axis)
+
+
+def _computeX(runsDF, regionsDF, seed, networks, tasks, clipZ, aggType):
     seedTag = 'RspAvg' if seed == 'Avg' else 'RspSum'
     mask    = regionsDF['Network'].isin(networks) if networks else pd.Series(True, index=regionsDF.index)
     labels  = regionsDF[mask]['Label'].values
@@ -35,9 +44,10 @@ def _computeX(runsDF, regionsDF, seed, networks, tasks, clipZ):
     if tasks:
         tmp = tmp[tmp['TaskName'].isin(tasks)]
     tmp = tmp.dropna(subset=['Subject'])
-    # Average across runs first (per region), then across regions
-    sbjRegion = tmp.groupby('Subject')[cols].apply(lambda g: g.clip(-clipZ, clipZ).mean())
-    return sbjRegion.mean(axis=1)
+    # Aggregate across runs first (per region), then across regions
+    sbjRegion = tmp.groupby('Subject')[cols].apply(
+        lambda g: _agg(g.clip(-clipZ, clipZ), aggType))
+    return _agg(sbjRegion, aggType, axis=1)
 
 
 def _computeY(runsDF, yMode):
@@ -109,6 +119,12 @@ class VizApp:
         self.seedVar = tk.StringVar(value='Avg')
         for opt in ['Avg', 'Sum']:
             tk.Radiobutton(xFrame, text=opt, variable=self.seedVar, value=opt,
+                           command=self._update).pack(anchor=tk.W)
+
+        tk.Label(xFrame, text='Aggregation:').pack(anchor=tk.W, pady=(4, 0))
+        self.aggVar = tk.StringVar(value='Average')
+        for opt in ['Average', 'RMS', 'AverageAbs']:
+            tk.Radiobutton(xFrame, text=opt, variable=self.aggVar, value=opt,
                            command=self._update).pack(anchor=tk.W)
 
         # Tasks
@@ -189,11 +205,12 @@ class VizApp:
 
         seed      = self.seedVar.get()
         yMode     = self.yVar.get()
+        aggType   = self.aggVar.get()
         networks  = self._selectedNetworks()
         tasks     = self._selectedTasks()
         diagnoses = self._selectedDiagnoses()
 
-        sbjX        = _computeX(self.runsDF, self.regionsDF, seed, networks, tasks, clipZ)
+        sbjX        = _computeX(self.runsDF, self.regionsDF, seed, networks, tasks, clipZ, aggType)
         sbjY, sbjDF = _computeY(self.runsDF, yMode)
 
         self.ax.clear()
@@ -220,7 +237,7 @@ class VizApp:
                              fontsize=10, fontstyle='italic')
 
         seedTag = 'RspAvg' if seed == 'Avg' else 'RspSum'
-        self.ax.set_xlabel(f'Mean z-corr ({seedTag}, clip±{clipZ})')
+        self.ax.set_xlabel(f'{aggType} z-corr ({seedTag}, clip±{clipZ})')
         self.ax.set_ylabel(f'Norm. Hippocampus ({yMode})')
         self.ax.legend(loc='best', framealpha=0.7)
         self.ax.grid(True, alpha=0.3)

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import os, sys, pickle, yaml, shutil
+import os, sys, re, pickle, yaml, shutil
 from concurrent.futures import ProcessPoolExecutor, as_completed
 op  = os.path
 opj = op.join
@@ -43,10 +43,46 @@ def _checkpoint(outputPref, timecourses, rows, parcelsSize, labelsDF):
         labelsDF.to_excel(           w, sheet_name='Labels', index=False)
 
 
-def _buildRunList(boldDir, confoundsDir, keyword, fwhm, runs2tasksFile, log):
-    fsuff     = f'_fwhm{fwhm}' if fwhm else ''
-    boldFiles = glob(opj(boldDir,      f'sub-*_ses-*_task-{keyword}_run-*_Atlas_s0{fsuff}.dtseries.nii'))
+def _buildRunList(boldDir, confoundsDir, keyword, fwhm, runs2tasksFile, log,
+                  patternsAndIds=None):
+    if patternsAndIds:
+        boldGlob = opj(boldDir,      patternsAndIds['bold']['Pattern'].replace('KEYWORD', keyword))
+        cnfdGlob = opj(confoundsDir, patternsAndIds['confounds']['Pattern'].replace('KEYWORD', keyword))
+        boldRe   = re.compile(patternsAndIds['bold']['IdRegex'])
+        cnfdRe   = re.compile(patternsAndIds['confounds']['IdRegex'])
+
+        boldDict = {}
+        for f in glob(boldGlob):
+            m = boldRe.search(op.split(f)[1])
+            if m:
+                boldDict['-'.join(m.groups())] = (f, m.groups())
+
+        cnfdDict = {}
+        for f in glob(cnfdGlob):
+            m = cnfdRe.search(op.split(f)[1])
+            if m:
+                cnfdDict['-'.join(m.groups())] = f
+
+        boldSet, cnfdSet = set(boldDict), set(cnfdDict)
+        log.append(f'MATCH  {len(boldSet)} bold  |  {len(cnfdSet)} confound files')
+        for s in sorted(boldSet - cnfdSet): log.append(f'WARN   No confounds: {s}')
+        for s in sorted(cnfdSet - boldSet): log.append(f'WARN   No BOLD:      {s}')
+
+        common = sorted(boldSet & cnfdSet)
+        log.append(f'MATCH  {len(common)} paired runs')
+
+        allRuns = []
+        for key in common:
+            boldFile, groups = boldDict[key]
+            trueSbj, taskName, runStr = groups
+            allRuns.append((boldFile, cnfdDict[key], key, trueSbj, int(runStr), taskName, key))
+        return allRuns
+
+    boldFiles = glob(opj(boldDir,      f'*{keyword}*_Atlas_s0*.dtseries.nii'))
     cnfdFiles = glob(opj(confoundsDir, f'*_task-{keyword}_*_desc-confounds_*.tsv'))
+
+    print('boldFiles', len(boldFiles))
+    print('cnfdFiles', len(cnfdFiles))
 
     boldDict = {op.basename(f).split('_Atlas')[0]: f for f in boldFiles}
     cnfdDict = {op.basename(f).split('_desc')[0]:  f for f in cnfdFiles}
@@ -60,8 +96,8 @@ def _buildRunList(boldDir, confoundsDir, keyword, fwhm, runs2tasksFile, log):
     log.append(f'MATCH  {len(common)} paired runs')
 
     if runs2tasksFile:
-        r2tDict   = {origID: (sbj, idx, task)
-                     for origID, sbj, idx, task in _parseRuns2Tasks(runs2tasksFile)}
+        r2tDict = {origID: (sbj, idx, task)
+                   for origID, sbj, idx, task in _parseRuns2Tasks(runs2tasksFile)}
         allRuns = []
         for sig in common:
             if sig in r2tDict:
@@ -103,6 +139,7 @@ def runPipeline(cfgFile, outputPref):
     dlabelFile   = parcCfg.get('dlabelFile', YEO_DLABEL)
     labelFile    = parcCfg['labelFile']
     r2tFile      = parcCfg.get('runs2tasksFile', None)
+    patternsAndIds = cfg.pop('PATTERNS_AND_IDS', None)
 
     opts = getOpts(cfg)   # merge with defaults once; pass to workers
 
@@ -110,7 +147,8 @@ def runPipeline(cfgFile, outputPref):
     parcelIdxs, labelsDF = loadParcelIdxs(dlabelFile, labelFile)
     parcelsSize = np.array([idxs.size for idxs in parcelIdxs])
 
-    allRuns = _buildRunList(boldDir, confoundsDir, keyword, fwhm, r2tFile, log)
+    allRuns = _buildRunList(boldDir, confoundsDir, keyword, fwhm, r2tFile, log,
+                            patternsAndIds=patternsAndIds)
     nWorkers = int(os.environ.get('SLURM_CPUS_PER_TASK', os.cpu_count()))
     print(f'Processing {len(allRuns)} runs across {nWorkers} workers '
           f'({len(parcelIdxs)} parcels)...', flush=True)
