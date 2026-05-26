@@ -146,7 +146,7 @@ class VizApp:
 
     def _onLoad(self):
         path = easygui.fileopenbox(title='Select Report XLSX',
-                                   filetypes=['*.xlsx', '*.*'])
+                                   filetypes=['*.xlsx'])
         if path:
             self._loadReport(path)
 
