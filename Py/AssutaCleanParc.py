@@ -6,6 +6,7 @@ opj = op.join
 
 import numpy as np
 import pandas as pd
+import openpyxl
 from glob import glob
 
 from AssutaCleanBold  import _cleanBoldData, getOpts
