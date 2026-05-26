@@ -10,7 +10,6 @@ from glob import glob
 
 YEO_DLABEL = r'C:\Projects\Parcellations\Yeo\Yeo2011_17Networks_91K.split_components.dlabel.nii'
 
-
 def _parseDesc(desc):
     # '17Networks_LH_SomMotA'       -> Hemi='L', Network='SomMotA', SubParcel=''
     # '17Networks_LH_SomMotB_Cent'  -> Hemi='L', Network='SomMotB', SubParcel='Cent'
@@ -88,7 +87,7 @@ def _sigToMeta(sig):
     return parts.get('sub', sig), parts.get('task', ''), int(parts.get('run', 0))
 
 
-def parcellateDir(dtseriesDir, labelFile, outputFile, runs2tasksFile=None, dlabelFile=YEO_DLABEL):
+def parcellateDir(dtseriesDir, labelFile, outputPref, runs2tasksFile=None, dlabelFile=YEO_DLABEL):
     parcelIdxs, labelsDF = loadParcelIdxs(dlabelFile, labelFile)
     parcelsSize          = np.array([idxs.size for idxs in parcelIdxs])
 
@@ -147,26 +146,44 @@ def parcellateDir(dtseriesDir, labelFile, outputFile, runs2tasksFile=None, dlabe
         timecourses.append(ts)
         rows.append(dict(Subject=trueSbj, Run=fullRunIdx, TaskName=taskName, OrigID=origID))
 
-    out = dict(
-        Timecourses = timecourses,
-        parcelsSize = parcelsSize,
-        Runs        = pd.DataFrame(rows),
-        Labels      = labelsDF,
-    )
-    pickle.dump(out, open(outputFile, 'wb'))
-    print(f'Saved {len(timecourses)} runs → {outputFile}', flush=True)
+    arraysFile = f'{outputPref}_Arrays.pkl'
+    metaFile   = f'{outputPref}_Meta.xlsx'
+
+    pickle.dump({'Timecourses': timecourses, 'parcelsSize': parcelsSize},
+                open(arraysFile, 'wb'))
+
+    with pd.ExcelWriter(metaFile, engine='openpyxl') as writer:
+        pd.DataFrame(rows).to_excel(writer, sheet_name='Runs',   index=False)
+        labelsDF.to_excel(           writer, sheet_name='Labels', index=False)
+
+    print(f'Saved {len(timecourses)} runs → {arraysFile}, {metaFile}', flush=True)
+
+
+def runAssutaGreg():
+    # dtseriesDir, labelFile, outputFile, runs2tasksFile=None, dlabelFile=YEO_DLABEL
+    parcellateDir(
+        dtseriesDir = r'C:\Projects\Assuta\NO_BBR\Clean_Task_FWHM5',
+        labelFile = r'\Projects\Parcellations\Yeo\17Networks_ColorLUT_freeview.txt',
+        outputPref = 'Greg_114Timecourse',
+        )
 
 
 if __name__ == '__main__':
-    import argparse
-    p = argparse.ArgumentParser(description='Parcellate cleaned dtseries files into Yeo parcel timeseries.')
-    p.add_argument('dtseriesDir',  help='Folder containing *_Atlas_s0_cleaned.dtseries.nii files')
-    p.add_argument('labelFile',    help='Parcel label text file (parcelIdx, desc, r, g, b, a)')
-    p.add_argument('outputFile',   help='Output pickle file path')
-    p.add_argument('--runs2tasks', default=None, dest='runs2tasksFile',
-                                   help='Runs2Tasks.txt mapping file (omit for single-session datasets)')
-    p.add_argument('--dlabel',     default=YEO_DLABEL, dest='dlabelFile',
-                                   help='dlabel parcellation file (default: Yeo 91K)')
-    args = p.parse_args()
-    parcellateDir(args.dtseriesDir, args.labelFile, args.outputFile,
-                  args.runs2tasksFile, args.dlabelFile)
+    doRunWithCMD = False
+    doRunGreg = True
+    if doRunWithCMD:
+        import argparse
+        p = argparse.ArgumentParser(description='Parcellate cleaned dtseries files into Yeo parcel timeseries.')
+        p.add_argument('dtseriesDir',  help='Folder containing *_Atlas_s0_cleaned.dtseries.nii files')
+        p.add_argument('labelFile',    help='Parcel label text file (parcelIdx, desc, r, g, b, a)')
+        p.add_argument('outputPref',   help='Output file prefix (produces <pref>_Arrays.pkl and <pref>_Meta.xlsx)')
+        p.add_argument('--runs2tasks', default=None, dest='runs2tasksFile',
+                                       help='Runs2Tasks.txt mapping file (omit for single-session datasets)')
+        p.add_argument('--dlabel',     default=YEO_DLABEL, dest='dlabelFile',
+                                       help='dlabel parcellation file (default: Yeo 91K)')
+        args = p.parse_args()
+        parcellateDir(args.dtseriesDir, args.labelFile, args.outputPref,
+                      args.runs2tasksFile, args.dlabelFile)
+        
+    if doRunGreg:
+        runAssutaGreg()

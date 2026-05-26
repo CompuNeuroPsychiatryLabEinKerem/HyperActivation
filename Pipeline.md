@@ -14,28 +14,23 @@ fMRIPrep output
          └── *_Atlas_s0_cleaned.dtseries.nii
               │
               ▼
-[2] AssutaParcellate.py  ──── dlabel file + label text file + Runs2Tasks.txt
+[2] AssutaParcellate.py  ──── dlabel file + label text file [+ Runs2Tasks.txt]
               │
-              └── All_114_Timecourses.pkl   (HPC-generated, pandas 3.x)
+              ├── <pref>_Arrays.pkl   (numpy: Timecourses, parcelsSize)
+              └── <pref>_Meta.xlsx    (Runs + Labels sheets)
                    │
                    ▼
-         [3] ConvertPkl.py  (one-time, run in conv_env with pandas 3.x)
+         [3] AssutaFC.py
                    │
-                   ├── All_114_Arrays.pkl   (numpy only)
-                   └── All_114_Meta.xlsx    (Runs + Labels sheets)
+                   └── <pref>_FC.pkl
                         │
                         ▼
-              [4] AssutaFC.py
+              [4] AssutaExport.py  ──── hippocampi_estimates.csv
                         │
-                        └── All_114_FC.pkl
+                        └── All_114_Report.xlsx
                              │
                              ▼
-                   [5] AssutaExport.py  ──── hippocampi_estimates.csv
-                             │
-                             └── All_114_Report.xlsx
-                                  │
-                                  ▼
-                        [6] AssutaViz.py  (interactive)
+                   [5] AssutaViz.py  (interactive)
 ```
 
 ---
@@ -135,37 +130,18 @@ Rest runs (not listed) are auto-assigned: session suffix A → Run 1, B → Run 
 
 **How to run (HPC):**
 ```bash
-sbatch --export=PY_SCRIPT="Py/AssutaParcellate.py",PY_ARGS="<dtseriesDir> <runs2tasksFile> <labelFile> <outputFile>" Py/SimpleGateScript.sh
+sbatch --export=PY_SCRIPT="Py/AssutaParcellate.py",PY_ARGS="<dtseriesDir> <labelFile> <outputPref> [--runs2tasks <Runs2Tasks.txt>]" Py/SimpleGateScript.sh
 ```
 
 ---
 
-## Stage 3 — Pickle Conversion (`ConvertPkl.py`)
-
-**One-time step.** Required because the HPC (fMRIPrep 24.x era) runs pandas 3.x, while the local analysis environment uses pandas 2.2.x — making the HPC-generated pickle unreadable locally.
-
-**Runs in:** `Py/conv_env/` (dedicated venv with pandas ≥ 3.0)
-
-**Input:** `All_114_Timecourses.pkl`
-
-**Output:**
-- `All_114_Arrays.pkl` — numpy-only: `{Timecourses, parcelsSize}`
-- `All_114_Meta.xlsx` — two sheets: `Runs`, `Labels`
-
-**How to run:**
-```bash
-Py/conv_env/Scripts/python Py/ConvertPkl.py Py/All_114_Timecourses.pkl Py/All_114_Arrays.pkl Py/All_114_Meta.xlsx
-```
-
----
-
-## Stage 4 — Functional Connectivity (`AssutaFC.py`)
+## Stage 3 — Functional Connectivity (`AssutaFC.py`)
 
 **Runs on:** local (Anaconda3)
 
 **Input:**
-- `All_114_Arrays.pkl` — numpy arrays from Stage 3
-- `All_114_Meta.xlsx` — Runs + Labels from Stage 3
+- `<pref>_Arrays.pkl` — numpy arrays from Stage 2
+- `<pref>_Meta.xlsx` — Runs + Labels from Stage 2
 
 **Output:** `All_114_FC.pkl` containing:
 
@@ -193,7 +169,7 @@ C:\Anaconda3\python Py/AssutaFC.py Py/All_114_Arrays.pkl Py/All_114_Meta.xlsx Py
 
 ---
 
-## Stage 5 — Report Export (`AssutaExport.py`)
+## Stage 4 — Report Export (`AssutaExport.py`)
 
 **Runs on:** local (Anaconda3)
 
@@ -235,7 +211,7 @@ C:\Anaconda3\python Py/AssutaExport.py Py/All_114_FC.pkl MeitarData/hippocampi_e
 
 ---
 
-## Stage 6 — Interactive Visualization (`AssutaViz.py`)
+## Stage 5 — Interactive Visualization (`AssutaViz.py`)
 
 **Runs on:** local (Anaconda3)
 
