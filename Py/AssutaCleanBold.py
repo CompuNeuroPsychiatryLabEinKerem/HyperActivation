@@ -213,22 +213,22 @@ def getOpts(optsInp={}):
     return opts
 
 
-def cleanBoldFile(boldFile, confoundsFile, outFile, opts={}):
-    opts          = getOpts(opts)
+def _cleanBoldData(boldFile, confoundsFile, opts):
+    """Clean BOLD in memory. Returns (boldData, status); boldData is None on failure."""
     remove1stVols = opts['MISC']['remove1stVols']
     TR            = opts['MISC']['TR']
     SCRUB         = opts['SCRUB']
     REGRESS       = opts['REGRESS']
     FILTER        = opts['FILTER']
 
-    obj      = nb.load(boldFile)
+    obj      = nb.load(boldFile, mmap=False)
     boldData = obj.get_fdata()
-    numTrs, numVertices = boldData.shape
+    numTrs   = boldData.shape[0]
 
     confoundsDf = pd.read_csv(confoundsFile, sep='\t')
 
     if len(confoundsDf) != numTrs:
-        return f'SKIPPED — TR mismatch: BOLD={numTrs}, confounds={len(confoundsDf)}'
+        return None, obj, f'SKIPPED — TR mismatch: BOLD={numTrs}, confounds={len(confoundsDf)}'
 
     doScrub = SCRUB['Do']
     if doScrub:
@@ -239,7 +239,7 @@ def cleanBoldFile(boldFile, confoundsFile, outFile, opts={}):
 
     if not areEnoughInliers:
         numOutliers = iOutliers.size + nRemoveHead + nRemoveTail
-        return f'REJECTED — too many outliers ({numOutliers} TRs)'
+        return None, obj, f'REJECTED — too many outliers ({numOutliers} TRs)'
 
     if doScrub and not iOutliers.size:
         doScrub = False
@@ -248,40 +248,42 @@ def cleanBoldFile(boldFile, confoundsFile, outFile, opts={}):
     if doScrub:
         boldData = boldData[iInliers, :]
 
-    doNuisance = REGRESS['Do']
-    if doNuisance:
+    if REGRESS['Do']:
         useRegressors = REGRESS['useConfounds']
         regressors    = getRegressors(confoundsDf, useRegressors).values
         regressors    = regressors[nRemoveHead:numTrs-nRemoveTail, :]
         if doScrub:
             regressors = regressors[iInliers, :]
-
         regobj    = linreg(fit_intercept=True).fit(regressors, boldData)
         boldData -= regobj.predict(regressors)
 
-    doFilter = FILTER['Do']
-    if doFilter:
+    if FILTER['Do']:
         numTrsNoHeadTail = numTrs - nRemoveHead - nRemoveTail
         if doScrub:
-            f        = interp1d(iInliers, boldData, kind='cubic', axis=0)
-            boldData = f(range(numTrsNoHeadTail))
+            fi       = interp1d(iInliers, boldData, kind='cubic', axis=0)
+            boldData = fi(range(numTrsNoHeadTail))
 
         order, band = FILTER['iirOrder'], FILTER['band']
         wn, btype   = (band, 'bandpass') if band[-1] < 1/(2*TR) else (band[0], 'highpass')
-        args        = dict(analog=False, fs=1/TR, output='sos', Wn=wn, btype=btype)
-
-        sos      = iirfilter(order, **args)
+        sos      = iirfilter(order, analog=False, fs=1/TR, output='sos', Wn=wn, btype=btype)
         boldData = sosfiltfilt(sos, boldData, axis=0)
 
         if doScrub:
             boldData = boldData[iInliers, :]
 
-    chdr, cn, cx, cf = obj.header, obj.nifti_header, obj.extra, obj.file_map
-    chdr = setNumTpForCiftiHdr(chdr, boldData.shape[0])
-    cout = nb.Cifti2Image(dataobj=boldData, header=chdr,
-                          nifti_header=cn, extra=cx, file_map=cf)
-    cout.to_filename(outFile)
+    return boldData, obj, 'ok'
 
+
+def cleanBoldFile(boldFile, confoundsFile, outFile, opts={}):
+    opts             = getOpts(opts)
+    boldData, obj, status = _cleanBoldData(boldFile, confoundsFile, opts)
+    if status != 'ok':
+        return status
+
+    chdr = setNumTpForCiftiHdr(obj.header, boldData.shape[0])
+    nb.Cifti2Image(dataobj=boldData, header=chdr,
+                   nifti_header=obj.nifti_header, extra=obj.extra,
+                   file_map=obj.file_map).to_filename(outFile)
     return 'ok'
 
 
