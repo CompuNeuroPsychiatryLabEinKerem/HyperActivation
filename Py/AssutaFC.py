@@ -14,7 +14,20 @@ def _normTS(ts):
     return ts / nrms
 
 
-def computeFC(arraysPkl, metaXlsx, outputFile=None):
+def computeFC(arraysPkl=None, metaXlsx=None, outputFile=None, 
+              filePref=None, returnResults=False):
+    
+    if filePref is not None:
+        if arraysPkl is None:
+            arraysPkl = f'{filePref}_Arrays.pkl'
+        if metaXlsx is None:
+            metaXlsx = f'{filePref}_Meta.xlsx'
+        if outputFile is None:
+            outputFile = f'{filePref}_FC.pkl'
+            
+    if arraysPkl is None:
+        returnResults = True
+            
     arrays      = pickle.load(open(arraysPkl, 'rb'))
     timecourses = arrays['Timecourses']   # list of (nParcels, nTP)
     parcelsSize = arrays['parcelsSize']   # (nParcels,)
@@ -47,14 +60,19 @@ def computeFC(arraysPkl, metaXlsx, outputFile=None):
     if outputFile:
         pickle.dump(out, open(outputFile, 'wb'))
         print(f'Saved FC ({nFiles} runs, 2 seeds, {nParcels} parcels) → {outputFile}', flush=True)
-    return out
+
+    if returnResults:
+        return out
 
 
 if __name__ == '__main__':
     import argparse
     p = argparse.ArgumentParser(description='Compute Rsp seed-based FC from parcel timecourses.')
-    p.add_argument('arraysPkl', help='Numpy arrays pickle (Timecourses, parcelsSize)')
-    p.add_argument('metaXlsx',  help='Metadata xlsx (Runs + Labels sheets)')
-    p.add_argument('outputFile', help='Output FC pickle file path')
+    p.add_argument('filePref',     nargs='?', default=None,
+                   help='File prefix — derives _Arrays.pkl, _Meta.xlsx, _FC.pkl automatically')
+    p.add_argument('--arraysPkl',  default=None, help='Override arrays pkl path')
+    p.add_argument('--metaXlsx',   default=None, help='Override meta xlsx path')
+    p.add_argument('--outputFile', default=None, help='Override output FC pkl path')
     args = p.parse_args()
-    computeFC(args.arraysPkl, args.metaXlsx, args.outputFile)
+    computeFC(arraysPkl=args.arraysPkl, metaXlsx=args.metaXlsx,
+              outputFile=args.outputFile, filePref=args.filePref)

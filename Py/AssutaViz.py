@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-import sys
+import os, sys
 import tkinter as tk
+import easygui
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -57,26 +58,34 @@ def _computeY(runsDF, yMode):
 # ── Frontend ───────────────────────────────────────────────────────────────────
 
 class VizApp:
-    def __init__(self, root, xlsxFile):
+    def __init__(self, root, xlsxFile=None):
         self.root = root
         self.root.title('RSP Connectivity vs Hippocampal Volume')
-        self.runsDF, self.regionsDF, self.networks, self.tasks = _loadData(xlsxFile)
+        self.runsDF = self.regionsDF = self.networks = self.tasks = None
         self._buildUI()
-        self._update()
+        if xlsxFile:
+            self._loadReport(xlsxFile)
 
     def _buildUI(self):
-        # Figure
+        # ── Top bar ───────────────────────────────────────────────────────
+        topBar = tk.Frame(self.root)
+        topBar.pack(side=tk.TOP, fill=tk.X, padx=8, pady=4)
+        tk.Button(topBar, text='Load Report…', command=self._onLoad).pack(side=tk.LEFT)
+        self.fileLabel = tk.Label(topBar, text='No file loaded', anchor=tk.W, fg='gray')
+        self.fileLabel.pack(side=tk.LEFT, padx=8)
+
+        # ── Figure ────────────────────────────────────────────────────────
         self.fig, self.ax = plt.subplots(figsize=(8, 5))
         self.fig.tight_layout(pad=3)
         canvas = FigureCanvasTkAgg(self.fig, master=self.root)
         canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self.canvas = canvas
 
-        # Control panel
+        # ── Control panel ─────────────────────────────────────────────────
         ctrl = tk.Frame(self.root)
         ctrl.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=6)
 
-        # ── Y-axis ────────────────────────────────────────────────────────
+        # Y-axis
         yFrame = tk.LabelFrame(ctrl, text='Y-Axis (Hippocampus)', padx=4, pady=4)
         yFrame.pack(side=tk.LEFT, padx=6, anchor=tk.N)
         self.yVar = tk.StringVar(value='Average')
@@ -84,7 +93,7 @@ class VizApp:
             tk.Radiobutton(yFrame, text=opt, variable=self.yVar, value=opt,
                            command=self._update).pack(anchor=tk.W)
 
-        # ── X-axis ────────────────────────────────────────────────────────
+        # X-axis
         xFrame = tk.LabelFrame(ctrl, text='X-Axis (Connectivity)', padx=4, pady=4)
         xFrame.pack(side=tk.LEFT, padx=6, anchor=tk.N)
 
@@ -102,55 +111,64 @@ class VizApp:
             tk.Radiobutton(xFrame, text=opt, variable=self.seedVar, value=opt,
                            command=self._update).pack(anchor=tk.W)
 
-        # ── Tasks ─────────────────────────────────────────────────────────
+        # Tasks
         taskFrame = tk.LabelFrame(ctrl, text='Tasks', padx=4, pady=4)
         taskFrame.pack(side=tk.LEFT, padx=6, anchor=tk.N, fill=tk.Y)
-
         self.taskList = tk.Listbox(taskFrame, selectmode=tk.MULTIPLE,
-                                   height=min(len(self.tasks), 12),
-                                   exportselection=False, width=12)
+                                   height=6, exportselection=False, width=12)
         tsb = tk.Scrollbar(taskFrame, orient=tk.VERTICAL, command=self.taskList.yview)
         self.taskList.config(yscrollcommand=tsb.set)
         self.taskList.pack(side=tk.LEFT, fill=tk.Y)
         tsb.pack(side=tk.LEFT, fill=tk.Y)
-
-        for i, t in enumerate(self.tasks):
-            self.taskList.insert(tk.END, t)
-            if t != 'rest':
-                self.taskList.selection_set(i)      # all except rest selected by default
-
         self.taskList.bind('<<ListboxSelect>>', lambda e: self._update())
 
-        # ── Networks ──────────────────────────────────────────────────────
+        # Networks
         netFrame = tk.LabelFrame(ctrl, text='Networks', padx=4, pady=4)
         netFrame.pack(side=tk.LEFT, padx=6, anchor=tk.N, fill=tk.Y)
-
         self.netList = tk.Listbox(netFrame, selectmode=tk.MULTIPLE,
-                                  height=min(len(self.networks), 12),
-                                  exportselection=False, width=16)
+                                  height=12, exportselection=False, width=16)
         sb = tk.Scrollbar(netFrame, orient=tk.VERTICAL, command=self.netList.yview)
         self.netList.config(yscrollcommand=sb.set)
         self.netList.pack(side=tk.LEFT, fill=tk.Y)
         sb.pack(side=tk.LEFT, fill=tk.Y)
-
-        for i, n in enumerate(self.networks):
-            self.netList.insert(tk.END, n)
-            self.netList.selection_set(i)           # ALL selected by default
-
         self.netList.bind('<<ListboxSelect>>', lambda e: self._update())
 
-        # ── Diagnoses ─────────────────────────────────────────────────────
+        # Diagnoses
         diagFrame = tk.LabelFrame(ctrl, text='Diagnoses', padx=4, pady=4)
         diagFrame.pack(side=tk.LEFT, padx=6, anchor=tk.N, fill=tk.Y)
-
         self.diagList = tk.Listbox(diagFrame, selectmode=tk.MULTIPLE,
-                                   height=len(DIAG_ORDER),
-                                   exportselection=False, width=12)
+                                   height=len(DIAG_ORDER), exportselection=False, width=12)
         self.diagList.pack()
         for i, d in enumerate(DIAG_ORDER):
             self.diagList.insert(tk.END, d)
-            self.diagList.selection_set(i)              # all selected by default
+            self.diagList.selection_set(i)
         self.diagList.bind('<<ListboxSelect>>', lambda e: self._update())
+
+    def _onLoad(self):
+        path = easygui.fileopenbox(title='Select Report XLSX',
+                                   filetypes=['*.xlsx', '*.*'])
+        if path:
+            self._loadReport(path)
+
+    def _loadReport(self, path):
+        self.runsDF, self.regionsDF, self.networks, self.tasks = _loadData(path)
+        self.fileLabel.config(text=os.path.basename(path), fg='black')
+        self._populateLists()
+        self._update()
+
+    def _populateLists(self):
+        self.taskList.delete(0, tk.END)
+        self.taskList.config(height=min(len(self.tasks), 12))
+        for i, t in enumerate(self.tasks):
+            self.taskList.insert(tk.END, t)
+            if t != 'rest':
+                self.taskList.selection_set(i)
+
+        self.netList.delete(0, tk.END)
+        self.netList.config(height=min(len(self.networks), 12))
+        for i, n in enumerate(self.networks):
+            self.netList.insert(tk.END, n)
+            self.netList.selection_set(i)
 
     def _selectedNetworks(self):
         return [self.networks[i] for i in self.netList.curselection()]
@@ -162,6 +180,8 @@ class VizApp:
         return [DIAG_ORDER[i] for i in self.diagList.curselection()]
 
     def _update(self):
+        if self.runsDF is None:
+            return
         try:
             clipZ = float(self.clipVar.get())
         except ValueError:
@@ -208,14 +228,12 @@ class VizApp:
         self.canvas.draw()
 
 
-def run(xlsxFile):
+def run(xlsxFile=None):
     root = tk.Tk()
     VizApp(root, xlsxFile)
     root.mainloop()
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        print('Usage: python AssutaViz.py <report.xlsx>')
-        sys.exit(1)
-    run(sys.argv[1])
+    xlsxFile = sys.argv[1] if len(sys.argv) == 2 else None
+    run(xlsxFile)
