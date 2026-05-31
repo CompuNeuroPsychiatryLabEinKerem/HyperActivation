@@ -92,7 +92,7 @@ def parcellateDir(dtseriesDir, labelFile, outputPref, runs2tasksFile=None, dlabe
     parcelsSize          = np.array([idxs.size for idxs in parcelIdxs])
 
     # All cleaned bold files keyed by signature (everything before _Atlas)
-    allFiles    = glob(opj(dtseriesDir, '*_Atlas_s0_cleaned.dtseries.nii'))
+    allFiles    = glob(opj(dtseriesDir, '*_Atlas_s0_*.dtseries.nii'))
     boldSigDict = {op.basename(f).split('_Atlas')[0]: f for f in allFiles}
 
     if runs2tasksFile is None:
@@ -162,9 +162,9 @@ def parcellateDir(dtseriesDir, labelFile, outputPref, runs2tasksFile=None, dlabe
 def runAssutaGreg():
     # dtseriesDir, labelFile, outputFile, runs2tasksFile=None, dlabelFile=YEO_DLABEL
     parcellateDir(
-        dtseriesDir = r'C:\Projects\Assuta\NO_BBR\Clean_Task_FWHM5',
+        dtseriesDir = r'C:\Projects\Assuta\NO_BBR\Task_Half_Cleaned',
         labelFile = r'\Projects\Parcellations\Yeo\17Networks_ColorLUT_freeview.txt',
-        outputPref = 'Greg_114Timecourse',
+        outputPref = 'Greg_114HC',
         )
 
 

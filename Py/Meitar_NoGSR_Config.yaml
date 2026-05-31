@@ -1,0 +1,46 @@
+# Bold-cleaning pipeline config — copy and fill in paths before running
+#
+# Paths: forward slashes work on all platforms, including Windows.
+#   Windows:  bold_dir: C:/Projects/Assuta/Final
+#   Linux:    bold_dir: /data/Assuta/Final
+# Backslashes also work on Windows if the value is quoted:
+#   bold_dir: "C:\\Projects\\Assuta\\Final"
+
+PATHS:
+  root_dir: /sci/labs/shahar.arzy/uri.elias/Projects_Data/Assuta_Meitar   # Where all other paths start
+  bold_dir: DtSeries                                                      # folder with *.dtseries.nii files
+  confounds_dir:  Confounds        
+  # folder with *_desc-confounds_*.tsv files
+  dest_dir: DtSeriesClean                        # cleaned files land here; config is also copied here
+  keyword:        "*"                      # task label in filename (rest | mental | …); use "*" (quoted) to match any keyword
+  fwhm:           0                         # smoothing radius; 0 = unsmoothed
+
+MISC:
+  TR:             2.
+  remove1stVols:  2
+
+SCRUB:
+  Do:             false
+  fdThr:          -1        # framewise-displacement threshold (mm); -1 = off
+  dvarsThr:       75        # DVARS threshold; -1 = off
+  minStreakThr:   -1        # min inlier streak length to keep; -1 = off
+  acceptThr:      -1        # min inlier fraction to accept a run (0–1); -1 = off
+
+REGRESS:
+  Do:             true
+  useConfounds:
+    - framewise_displacement
+    - csf(_derivative)?
+    - motion_outlier.+
+    - (rot|trans)_[xyz](_derivative1)?
+
+FILTER:
+  Do:             true
+  iirOrder:       3
+  band:           [0.01, 0.25]    # Hz; [lo, hi] = bandpass  |  [lo] = highpass
+
+PARCELLATE:
+  labelFile: 17Networks_ColorLUT_freeview.txt
+  dlabelFile: Yeo2011_17Networks_91K.split_components.dlabel.nii
+  runs2tasksFile: Runs2Tasks.txt
+

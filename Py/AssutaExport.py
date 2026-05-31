@@ -45,7 +45,7 @@ def buildReport(fcPklFile, demoCSVFile, outputXLSX):
         regDF.to_excel( writer, sheet_name='Regions', index=False)
 
     print(f'Saved {len(mainDF)} rows × {len(mainDF.columns)} cols → {outputXLSX}', flush=True)
-    return mainDF, regDF
+    #return mainDF, regDF
 
 
 if __name__ == '__main__':
